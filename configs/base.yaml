@@ -1,0 +1,217 @@
+# Base shared configuration for GSM8K-style fine-tuning and evaluation.
+# This file is meant to stay method-agnostic and reusable across future
+# single-device, distributed, and PEFT experiments.
+
+# Global random seed used for dataset splitting and runtime reproducibility.
+seed: 42
+
+# Root directory where each run creates its own timestamped output folder.
+output_root: output
+
+# Optional explicit run name.
+# Leave as null to auto-generate a name from dataset, model, and seed.
+run_name: null
+
+model:
+  # Default base model used throughout this project.
+  name: Qwen/Qwen2.5-1.5B-Instruct
+
+  # Supported values in the shared loader: fp32, fp16, bf16.
+  dtype: bf16
+
+  # Leave null to auto-select cuda, then mps, then cpu.
+  device: null
+
+  # Hugging Face cache directory for model weights and tokenizer files.
+  # Once populated, later runs reuse these files instead of re-downloading.
+  cache_dir: data/model_cache
+
+  # Set true to require the model/tokenizer to already exist in cache.
+  local_files_only: false
+
+  # Keep false unless a future model choice explicitly requires remote code.
+  trust_remote_code: false
+
+  # Decoder cache should usually stay enabled for evaluation/generation.
+  # Future training code can override this if needed.
+  use_cache: true
+
+  # Optional QLoRA 4-bit loading. Leave false to preserve the standard path.
+  qlora: false
+  qlora_quant_type: nf4
+  qlora_compute_dtype: bf16
+  qlora_use_double_quant: true
+
+  # Shared tokenizer defaults.
+  padding_side: right
+  truncation_side: right
+
+data:
+  # Hugging Face dataset identifier for GSM8K.
+  dataset_name: gsm8k
+  dataset_config_name: main
+
+  # Raw download/cache location for Hugging Face Datasets.
+  cache_dir: data/raw
+
+  # Where processed project-formatted datasets are stored by prepare_data.py.
+  processed_dir: data/processed
+
+  # Optional path passed to load_from_disk for reusing a saved DatasetDict.
+  # Leave null to load directly from Hugging Face.
+  load_from_disk_path: null
+
+  # Standard split names used by the shared pipeline.
+  train_split: train
+  eval_split: validation
+  test_split: test
+
+  # If the source dataset does not ship a validation split, create one
+  # deterministically from the training set using this fraction and seed.
+  validation_size: 0.05
+  split_seed: 42
+
+  # Maximum token length used by tokenization and generation prompt encoding.
+  max_length: 256
+
+  # Keep this small by default for portability.
+  num_preprocessing_workers: 1
+
+  # Placeholder for future cache-control behavior in expanded pipelines.
+  overwrite_cache: false
+
+  # Reserved for future sequence packing experiments.
+  pack_to_max_length: false
+
+  # Append EOS after the answer when building causal LM labels.
+  append_eos_token: true
+
+  # Shared system prompt used to shape instruction-following behavior.
+  system_prompt: >-
+    You are a helpful math reasoning assistant. Solve the problem carefully and
+    end with a final answer.
+
+  # Shared instruction template applied to every GSM8K question.
+  instruction_template: |-
+    Solve the following math word problem. Show your reasoning, then end with a line in the form "#### <answer>".
+
+    Question: Natalia sold clips to 48 of her friends in April, and then she sold half as many clips in May. How many clips did Natalia sell altogether in April and May?
+    Reasoning: Natalia sold 48 clips in April. In May she sold half as many, so she sold 48 / 2 = 24 clips. Altogether she sold 48 + 24 = 72 clips.
+    #### 72
+
+    Question: Weng earns $12 an hour for babysitting. Yesterday, she babysat for 5 hours. How much did she earn?
+    Reasoning: Weng earns 12 dollars each hour. For 5 hours, she earned 12 * 5 = 60 dollars.
+    #### 60
+
+    Question: Betty has 24 marbles. She gives 8 marbles to her brother and then buys 5 more. How many marbles does Betty have now?
+    Reasoning: Betty starts with 24 marbles. After giving away 8, she has 24 - 8 = 16 marbles. Then she buys 5 more, so she has 16 + 5 = 21 marbles.
+    #### 21
+
+    Question: A restaurant has 9 tables. Each table seats 4 people. If 6 seats are empty, how many people are seated?
+    Reasoning: The restaurant has 9 * 4 = 36 total seats. Since 6 seats are empty, 36 - 6 = 30 people are seated.
+    #### 30
+
+    Question: {question}
+    Reasoning:
+
+dataloader:
+  # Training and evaluation batch sizes for the shared setup layer.
+  train_batch_size: 8
+  eval_batch_size: 256
+
+  # DataLoader worker settings.
+  num_workers: 0
+  pin_memory: true
+
+optimizer:
+  # The current shared training setup initializes AdamW only.
+  # If other optimizers are added later, this field can become a selector.
+  name: adamw
+  lr: 1.0e-4
+  weight_decay: 0.01
+  betas: [0.9, 0.999]
+  eps: 1.0e-8
+
+scheduler:
+  # The shared setup currently wires a Hugging Face scheduler by name.
+  name: linear
+  num_warmup_steps: 0
+
+training:
+  # These are shared placeholders for future trainer implementations.
+  num_epochs: 1
+  max_steps: null
+  gradient_accumulation_steps: 1
+  log_every_steps: 10
+  eval_every_steps: 500
+  save_every_steps: 500
+  save_at_end: true
+  resume_from: null
+
+generation:
+  # Deterministic generation defaults for evaluation.
+  max_new_tokens: 128
+  temperature: 0.0
+  top_p: 1.0
+  num_beams: 1
+  do_sample: false
+
+peft:
+  # Shared PEFT block. Set enabled=true for LoRA experiments.
+  enabled: false
+
+  # Currently only LoRA is implemented in the shared codebase.
+  method: lora
+
+  # PEFT task type for causal language modeling.
+  task_type: CAUSAL_LM
+
+  # Standard LoRA hyperparameters.
+  r: 16
+  lora_alpha: 32
+  lora_dropout: 0.05
+  bias: none
+
+  # If provided, this exact list is used as the fixed target setting.
+  # This is the field to pin once auto-detect has printed/saved the layers
+  # you want to reuse in later experiments.
+  target_modules: null
+
+  # Default discovery mode used when target_modules is null.
+  target_modules_strategy: auto
+
+  # Optional list of extra modules to keep trainable and save with adapters.
+  modules_to_save: null
+
+  # Optional per-module rank map used by GoRA after gradient-based initialization.
+  rank_pattern: null
+
+  # Shared initialization knobs for custom low-rank layers.
+  weight_a_init_method: null
+  weight_b_init_method: null
+  run_lora_in_fp32: false
+
+  # Number of train batches used to estimate full-rank gradients before GoRA init.
+  gradient_estimation_steps: 8
+
+  # GoRA-specific options. Ignored unless peft.method is set to gora.
+  gora_init_method: weight_svd
+  gora_max_rank: null
+  gora_min_rank: 1
+  gora_softmax_importance: false
+  gora_scale_by_lr: false
+  gora_lr: 1.0e-3
+  gora_features_func: null
+  gora_temperature: 0.5
+  gora_rank_stablize: false
+  gora_dynamic_scaling: false
+  gora_allocate_stretagy: moderate
+  gora_scale_importance: false
+  gora_importance_type: union_frobenius_norm
+  gora_stable_gemma: 0.02
+
+checkpoint:
+  # Shared checkpoint directory naming and best-metric selection.
+  dir_name: checkpoints
+  metric_name: accuracy
+  metric_mode: max
