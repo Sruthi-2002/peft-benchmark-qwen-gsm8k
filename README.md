@@ -74,7 +74,6 @@ Notes:
 
 * `experiments/` contains the main benchmark entrypoints used in this repo.
 * `scripts/train.py` is a shared training setup entrypoint, but the benchmark runs are launched through `experiments/*.py`.
-* `visualization/` contains plotting and log-summary utilities.
 * `analysis/` contains the NSight Systems SQL Queries and python script to generate GPU plots.
 
 ---
